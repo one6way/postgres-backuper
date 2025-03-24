@@ -1,0 +1,57 @@
+[
+  // Continue команды
+  {
+    "key": "ctrl+shift+/",
+    "command": "continue.edit",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+shift+e",
+    "command": "continue.explain",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+shift+t",
+    "command": "continue.test",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+shift+d",
+    "command": "continue.doc",
+    "when": "editorTextFocus"
+  },
+
+  // Cline команды
+  {
+    "key": "ctrl+space",
+    "command": "cline.suggest",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "tab",
+    "command": "cline.complete",
+    "when": "editorTextFocus && cline.hasSuggestion"
+  },
+
+  // Форматирование
+  {
+    "key": "ctrl+shift+i",
+    "command": "editor.action.formatDocument",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  {
+    "key": "alt+shift+f",
+    "command": "editor.action.formatSelection",
+    "when": "editorHasSelection && editorTextFocus && !editorReadonly"
+  },
+
+  // Навигация
+  {
+    "key": "ctrl+shift+o",
+    "command": "workbench.action.gotoSymbol"
+  },
+  {
+    "key": "ctrl+shift+r",
+    "command": "editor.action.referenceSearch.trigger"
+  }
+] 

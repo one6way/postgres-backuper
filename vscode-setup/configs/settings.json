@@ -1,0 +1,64 @@
+{
+  // Основные настройки редактора
+  "editor.formatOnSave": true,
+  "editor.inlineSuggest.enabled": true,
+  "editor.suggestSelection": "first",
+  "editor.acceptSuggestionOnEnter": "smart",
+  "editor.snippetSuggestions": "top",
+  "editor.minimap.enabled": false,
+  "editor.rulers": [80, 120],
+  
+  // Настройки Continue
+  "continue.enabled": true,
+  "continue.telemetry": false,
+  "continue.model": "gpt-4",
+  "continue.completionModel": "gpt-4",
+  "continue.systemMessage": "Вы - опытный разработчик, помогающий с кодом",
+  "continue.suggestOnTriggerCharacters": false,
+  
+  // Настройки Cline
+  "cline.enabled": true,
+  "cline.telemetry": false,
+  "cline.ai.model": "gpt-4",
+  "cline.shortcuts.suggest": "ctrl+space",
+  "cline.shortcuts.complete": "tab",
+  
+  // Настройки интерфейса
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.editor.enablePreview": false,
+  
+  // Настройки Git
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.autofetch": true,
+  
+  // Настройки файлов
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  
+  // Исключения для поиска
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.git": true,
+    "**/coverage": true
+  },
+  
+  // Оптимизация производительности
+  "extensions.autoUpdate": false,
+  "extensions.ignoreRecommendations": true,
+  "typescript.disableAutomaticTypeAcquisition": true,
+  
+  // Настройки терминала
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.defaultProfile.osx": "bash",
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  
+  // Форматирование кода
+  "prettier.singleQuote": true,
+  "prettier.printWidth": 120,
+  "prettier.tabWidth": 2,
+  "prettier.trailingComma": "es5"
+} 
