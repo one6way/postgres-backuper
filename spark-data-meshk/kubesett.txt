@@ -1,0 +1,59 @@
+kubectl create secret generic kafka-certs \
+  --from-file=truststore.jks=/path/to/truststore.jks \
+  --from-file=keystore.jks=/path/to/keystore.jks
+
+
+  apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: spark-kafka-to-adb
+spec:
+  type: Scala
+  mode: cluster
+  image: "spark-py-image"  # Замените на ваш образ Spark
+  mainClass: "com.example.SparkKafkaToADBApp"  # Укажите ваш класс
+  mainApplicationFile: "local:///path/to/app.jar"  # Путь к вашему приложению
+  executor:
+    cores: 1
+    instances: 2
+    memory: "1g"
+    spec:
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: kafka-certs
+      volumeMounts:
+      - name: kafka-certs
+        mountPath: "/etc/kafka/certs"
+  driver:
+    cores: 1
+    memory: "1g"
+    spec:
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: kafka-certs
+      volumeMounts:
+      - name: kafka-certs
+        mountPath: "/etc/kafka/certs"
+  sparkConf:
+    "spark.executor.extraJavaOptions": "-Djavax.net.ssl.trustStore=/etc/kafka/certs/truststore.jks -Djavax.net.ssl.trustStorePassword=password -Djavax.net.ssl.keyStore=/etc/kafka/certs/keystore.jks -Djavax.net.ssl.keyStorePassword=password"
+    "spark.driver.extraJavaOptions": "-Djavax.net.ssl.trustStore=/etc/kafka/certs/truststore.jks -Djavax.net.ssl.trustStorePassword=password -Djavax.net.ssl.keyStore=/etc/kafka/certs/keystore.jks -Djavax.net.ssl.keyStorePassword=password"
+
+
+from airflow.providers.cncf.kubernetes.operators.kubernetes_pod import KubernetesPodOperator
+
+spark_task = KubernetesPodOperator(
+    task_id="spark_kafka_to_adb",
+    namespace="default",
+    image="spark-py-image",  # Ваш образ Spark
+    arguments=[
+        "spark-submit",
+        "--master", "k8s://https://<k8s-api>",
+        "--conf", "spark.kubernetes.submit.file=/path/to/spark-kafka-to-adb.yaml",
+        "--adb-url", "{{ conn.adb_con.host }}",  # URL ADB из коннектора
+        "--adb-user", "{{ conn.adb_con.login }}",  # Логин ADB из коннектора
+        "--adb-password", "{{ conn.adb_con.password }}"  # Пароль ADB из коннектора
+    ],
+    do_xcom_push=True,
+)

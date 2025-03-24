@@ -62,11 +62,11 @@ def create_spark_task():
         arguments=[
             """
             # Ожидание инициализации init-контейнера
-            echo "Ожидание инициализации сертификатов..."
-            while [ ! -f /etc/kafka/certs/initialized ]; do
+            echo "Ожидание инициализации сертификатов и приложения..."
+            while [ ! -f /etc/kafka/certs/initialized ] || [ ! -f /opt/spark/work-dir/sparkapp.py ]; do
                 sleep 2
             done
-            echo "Сертификаты готовы, запуск Spark-приложения..."
+            echo "Сертификаты и приложение готовы, запуск Spark-приложения..."
             
             # Запуск Spark-приложения
             spark-submit \
@@ -103,7 +103,8 @@ def create_spark_task():
             "S3_SECRET_KEY": "{{ conn.minio.password }}",
             "S3_BUCKET": "{{ var.value.s3_certs_bucket }}",
             "S3_KEYSTORE_KEY": "certs/keystore.jks",
-            "S3_TRUSTSTORE_KEY": "certs/truststore.jks"
+            "S3_TRUSTSTORE_KEY": "certs/truststore.jks",
+            "S3_SPARKAPP_KEY": "apps/sparkapp.py"  # Путь к приложению в S3/MinIO
         },
         # Инициализация: контейнер, который загружает сертификаты из S3/MinIO перед запуском основного контейнера
         init_containers=[
@@ -117,27 +118,31 @@ def create_spark_task():
                     # Установка AWS CLI
                     apk add --no-cache aws-cli
 
-                    # Создание директории для сертификатов
+                    # Создание директорий
                     mkdir -p /etc/kafka/certs
+                    mkdir -p /opt/spark/work-dir
 
-                    # Загрузка сертификатов из S3/MinIO
+                    # Загрузка сертификатов и приложения из S3/MinIO
                     if [ -n "$S3_ENDPOINT" ]; then
                         # Использование MinIO Client при наличии эндпоинта
                         mc alias set minio $S3_ENDPOINT $S3_ACCESS_KEY $S3_SECRET_KEY
                         mc cp minio/$S3_BUCKET/$S3_KEYSTORE_KEY /etc/kafka/certs/keystore.jks
                         mc cp minio/$S3_BUCKET/$S3_TRUSTSTORE_KEY /etc/kafka/certs/truststore.jks
+                        mc cp minio/$S3_BUCKET/$S3_SPARKAPP_KEY /opt/spark/work-dir/sparkapp.py
                     else
                         # Использование AWS CLI для AWS S3
                         aws s3 cp s3://$S3_BUCKET/$S3_KEYSTORE_KEY /etc/kafka/certs/keystore.jks --region $AWS_REGION
                         aws s3 cp s3://$S3_BUCKET/$S3_TRUSTSTORE_KEY /etc/kafka/certs/truststore.jks --region $AWS_REGION
+                        aws s3 cp s3://$S3_BUCKET/$S3_SPARKAPP_KEY /opt/spark/work-dir/sparkapp.py --region $AWS_REGION
                     fi
 
-                    # Проверка успешной загрузки сертификатов
-                    if [ -f /etc/kafka/certs/keystore.jks ] && [ -f /etc/kafka/certs/truststore.jks ]; then
-                        echo "Сертификаты успешно загружены"
+                    # Проверка успешной загрузки файлов
+                    if [ -f /etc/kafka/certs/keystore.jks ] && [ -f /etc/kafka/certs/truststore.jks ] && [ -f /opt/spark/work-dir/sparkapp.py ]; then
+                        echo "Сертификаты и приложение успешно загружены"
+                        chmod +x /opt/spark/work-dir/sparkapp.py
                         touch /etc/kafka/certs/initialized
                     else
-                        echo "Ошибка при загрузке сертификатов"
+                        echo "Ошибка при загрузке файлов из S3/MinIO"
                         exit 1
                     fi
                     """
@@ -149,12 +154,17 @@ def create_spark_task():
                     {"name": "S3_BUCKET", "value": "{{ var.value.s3_certs_bucket }}"},
                     {"name": "S3_KEYSTORE_KEY", "value": "certs/keystore.jks"},
                     {"name": "S3_TRUSTSTORE_KEY", "value": "certs/truststore.jks"},
+                    {"name": "S3_SPARKAPP_KEY", "value": "apps/sparkapp.py"},
                     {"name": "AWS_REGION", "value": "{{ var.value.aws_region | default('us-east-1') }}"}
                 ],
                 "volume_mounts": [
                     {
                         "name": "cert-volume",
                         "mountPath": "/etc/kafka/certs"
+                    },
+                    {
+                        "name": "app-volume",
+                        "mountPath": "/opt/spark/work-dir"
                     }
                 ]
             }
@@ -164,12 +174,20 @@ def create_spark_task():
             {
                 "name": "cert-volume",
                 "emptyDir": {}
+            },
+            {
+                "name": "app-volume",
+                "emptyDir": {}
             }
         ],
         volume_mounts=[
             {
                 "name": "cert-volume",
                 "mountPath": "/etc/kafka/certs"
+            },
+            {
+                "name": "app-volume",
+                "mountPath": "/opt/spark/work-dir"
             }
         ],
         # Обработка ошибок и мониторинг

@@ -1,0 +1,95 @@
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: spark-kafka-to-adb
+  namespace: spark-namespace
+  labels:
+    app: spark-kafka-adb
+    component: data-transfer
+spec:
+  type: Python
+  mode: cluster
+  image: "spark-py-image:latest"
+  imagePullPolicy: Always
+  mainApplicationFile: "s3a://minio-bucket/spark-apps/kafka_to_adb.py"
+  sparkVersion: "3.2.0"
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 3
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 5
+    onSubmissionFailureRetryInterval: 20
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: "2g"
+    labels:
+      version: 3.2.0
+    serviceAccount: spark-sa
+    envSecrets:
+      - name: kafka-certs
+        key: truststore-password
+        value: KAFKA_TRUSTSTORE_PASSWORD
+      - name: kafka-certs
+        key: keystore-password
+        value: KAFKA_KEYSTORE_PASSWORD
+    volumes:
+      - name: kafka-certs
+        secret:
+          secretName: kafka-certs
+    volumeMounts:
+      - name: kafka-certs
+        mountPath: "/etc/kafka/certs"
+    env:
+      - name: KAFKA_BOOTSTRAP_SERVERS
+        value: "kafka-service:9092"
+      - name: KAFKA_TOPIC
+        value: "your_topic_name"
+  executor:
+    cores: 1
+    instances: 2
+    memory: "2g"
+    labels:
+      version: 3.2.0
+    envSecrets:
+      - name: kafka-certs
+        key: truststore-password
+        value: KAFKA_TRUSTSTORE_PASSWORD
+      - name: kafka-certs
+        key: keystore-password
+        value: KAFKA_KEYSTORE_PASSWORD
+    volumes:
+      - name: kafka-certs
+        secret:
+          secretName: kafka-certs
+    volumeMounts:
+      - name: kafka-certs
+        mountPath: "/etc/kafka/certs"
+  sparkConf:
+    "spark.kubernetes.driver.annotation.prometheus.io/scrape": "true"
+    "spark.kubernetes.driver.annotation.prometheus.io/port": "8090"
+    "spark.kubernetes.executor.annotation.prometheus.io/scrape": "true"
+    "spark.kubernetes.executor.annotation.prometheus.io/port": "8090"
+    "spark.metrics.conf.*.sink.prometheusServlet.class": "org.apache.spark.metrics.sink.PrometheusServlet"
+    "spark.metrics.conf.*.sink.prometheusServlet.path": "/metrics"
+    "spark.ui.prometheus.enabled": "true"
+    "spark.executor.processTreeMetrics.enabled": "true"
+    "spark.sql.streaming.metricsEnabled": "true"
+    "spark.executor.extraJavaOptions": "-Djavax.net.ssl.trustStore=/etc/kafka/certs/truststore.jks -Djavax.net.ssl.keyStore=/etc/kafka/certs/keystore.jks -XX:+UseG1GC -XX:+PrintGCDetails -XX:+PrintGCTimeStamps"
+    "spark.driver.extraJavaOptions": "-Djavax.net.ssl.trustStore=/etc/kafka/certs/truststore.jks -Djavax.net.ssl.keyStore=/etc/kafka/certs/keystore.jks -XX:+UseG1GC -XX:+PrintGCDetails -XX:+PrintGCTimeStamps"
+    "spark.dynamicAllocation.enabled": "true"
+    "spark.dynamicAllocation.initialExecutors": "1"
+    "spark.dynamicAllocation.minExecutors": "1"
+    "spark.dynamicAllocation.maxExecutors": "3"
+    "spark.memory.fraction": "0.6"
+    "spark.memory.storageFraction": "0.5"
+    "spark.sql.shuffle.partitions": "10"
+    "spark.default.parallelism": "10"
+  monitoring:
+    exposeDriverMetrics: true
+    exposeExecutorMetrics: true
+    prometheus:
+      jmxExporter:
+        enabled: true
+        port: 8090
+      port: 8090 
