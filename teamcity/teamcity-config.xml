@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configs>
+    <config id="postgres_backup" name="PostgreSQL Backup and Restore">
+        <parameters>
+            <param name="PG_HOST" value="localhost" />
+            <param name="PG_PORT" value="5432" />
+            <param name="PG_DB" value="postgres" />
+            <param name="PG_USER" value="postgres" />
+            <param name="MINIO_ENDPOINT" value="https://minio.vanek-test.com" />
+            <param name="MINIO_ACCESS_KEY" value="minioadmin" />
+            <param name="MINIO_SECRET_KEY" value="minioadmin" />
+            <param name="MINIO_BUCKET" value="postgres-backup" />
+        </parameters>
+        
+        <!-- Build Configuration for Backup -->
+        <build-config id="postgres_backup_daily" name="Daily PostgreSQL Backup">
+            <triggers>
+                <schedule trigger="0 0 * * *" /> <!-- Запуск каждый день в полночь -->
+            </triggers>
+            <steps>
+                <step name="Backup PostgreSQL">
+                    <executable>bash</executable>
+                    <arguments>
+                        <arg>backup_restore.sh</arg>
+                        <arg>backup</arg>
+                    </arguments>
+                </step>
+            </steps>
+        </build-config>
+        
+        <!-- Build Configuration for Restore -->
+        <build-config id="postgres_restore" name="Restore PostgreSQL from Backup">
+            <triggers>
+                <manual /> <!-- Только ручной запуск -->
+            </triggers>
+            <steps>
+                <step name="Restore PostgreSQL">
+                    <executable>bash</executable>
+                    <arguments>
+                        <arg>backup_restore.sh</arg>
+                        <arg>restore</arg>
+                    </arguments>
+                </step>
+            </steps>
+        </build-config>
+    </config>
+</configs> 
