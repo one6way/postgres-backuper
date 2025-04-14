@@ -40,7 +40,8 @@ def get_connection_params():
         'password': pg_conn.password,
         'jdbc_url': pg_conn.get_uri(),  # Полный JDBC URL
         'minio_endpoint': minio_conn.host,
-        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),  # Бакет можно оставить в переменных
+        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),
+        'minio_path': Variable.get('MINIO_BACKUP_PATH', 'backups/postgres'),  # Добавляем путь
         'minio_access_key': minio_conn.login,
         'minio_secret_key': minio_conn.password,
         'parallel_jobs': Variable.get('PARALLEL_JOBS', '4'),
@@ -123,7 +124,7 @@ def rotate_backups():
     retention_date = current_date - timedelta(days=params['backup_retention_days'])
     
     # Получаем список бэкапов
-    s3_ls_cmd = f"aws s3 ls s3://{params['minio_bucket']}/backups/ --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
+    s3_ls_cmd = f"aws s3 ls s3://{params['minio_bucket']}/{params['minio_path']}/ --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
     backups = run_command(s3_ls_cmd).strip().split('\n')
     
     for backup in backups:
@@ -136,7 +137,7 @@ def rotate_backups():
         if backup_date < retention_date:
             backup_name = backup.split()[-1]
             print(f"Удаляем старый бэкап: {backup_name}")
-            s3_rm_cmd = f"aws s3 rm s3://{params['minio_bucket']}/backups/{backup_name} --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
+            s3_rm_cmd = f"aws s3 rm s3://{params['minio_bucket']}/{params['minio_path']}/{backup_name} --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
             run_command(s3_rm_cmd)
 
 def incremental_backup(**context):
@@ -183,7 +184,7 @@ def incremental_backup(**context):
         
         # Валидируем и загружаем в MinIO
         validate_backup(backup_file)
-        s3_cmd = f"aws s3 cp {backup_file} s3://{params['minio_bucket']}/backups/$(basename {backup_file}) --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
+        s3_cmd = f"aws s3 cp {backup_file} s3://{params['minio_bucket']}/{params['minio_path']}/$(basename {backup_file}) --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
         run_command(s3_cmd)
         
         os.remove(backup_file)
@@ -206,7 +207,7 @@ def parallel_backup(**context):
                 backup_file = future.result()
                 # Валидируем и загружаем в MinIO
                 validate_backup(backup_file)
-                s3_cmd = f"aws s3 cp {backup_file} s3://{params['minio_bucket']}/backups/$(basename {backup_file}) --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
+                s3_cmd = f"aws s3 cp {backup_file} s3://{params['minio_bucket']}/{params['minio_path']}/$(basename {backup_file}) --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
                 run_command(s3_cmd)
                 os.remove(backup_file)
             except Exception as e:
@@ -233,7 +234,7 @@ def restore_backup(**context):
     
     try:
         # Получаем список бэкапов
-        s3_ls_cmd = f"aws s3 ls s3://{params['minio_bucket']}/backups/ --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
+        s3_ls_cmd = f"aws s3 ls s3://{params['minio_bucket']}/{params['minio_path']}/ --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
         backups = run_command(s3_ls_cmd).strip().split('\n')
         
         # Находим нужный бэкап
@@ -247,7 +248,7 @@ def restore_backup(**context):
         
         # Скачиваем бэкап
         local_file = f"{backup_dir}/{backup_file}"
-        s3_cp_cmd = f"aws s3 cp s3://{params['minio_bucket']}/backups/{backup_file} {local_file} --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
+        s3_cp_cmd = f"aws s3 cp s3://{params['minio_bucket']}/{params['minio_path']}/{backup_file} {local_file} --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
         run_command(s3_cp_cmd)
         
         # Валидируем бэкап
