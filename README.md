@@ -175,23 +175,110 @@ postgres-backuper/
 ### Облачное решение
 ```mermaid
 graph TD
-    A[TeamCity/Airflow] --> B[Скрипт бэкапа]
-    B --> C[PostgreSQL]
-    B --> D[MinIO Storage]
-    D --> E[Шифрование]
-    D --> F[Ротация бэкапов]
-    B --> G[Мониторинг]
+    subgraph PostgreSQL
+        PG[Сервер PostgreSQL]
+    end
+
+    subgraph TeamCity
+        TC[Сервер TeamCity]
+        BA[Build Agent]
+        BS[Скрипт бэкапа]
+    end
+
+    subgraph Хранилище
+        MINIO[MinIO S3]
+        AWS[AWS CLI]
+    end
+
+    PG -->|pg_dump| BS
+    BS -->|выполнение| BA
+    BA -->|мониторинг| TC
+    BS -->|загрузка| AWS
+    AWS -->|хранение| MINIO
+    MINIO -->|получение| BS
+
+    style PG fill:#f9f,stroke:#333,stroke-width:2px
+    style TC fill:#bbf,stroke:#333,stroke-width:2px
+    style MINIO fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
-### Локальное решение
+### Решение с Airflow
 ```mermaid
 graph TD
-    A[TeamCity/Airflow] --> B[Скрипт бэкапа]
-    B --> C[PostgreSQL]
-    B --> D[Локальное хранилище]
-    D --> E[Права доступа]
-    D --> F[Ротация бэкапов]
-    B --> G[Проверка места на диске]
+    subgraph PostgreSQL
+        PG[Сервер PostgreSQL]
+    end
+
+    subgraph Airflow
+        AF[Сервер Airflow]
+        SCH[Планировщик]
+        DAG[DAG]
+        OP[Python Operator]
+    end
+
+    subgraph Хранилище
+        MINIO[MinIO S3]
+        BOTO[Boto3 Client]
+    end
+
+    PG -->|psycopg2| OP
+    OP -->|выполнение| DAG
+    DAG -->|планирование| SCH
+    SCH -->|мониторинг| AF
+    OP -->|загрузка| BOTO
+    BOTO -->|хранение| MINIO
+    MINIO -->|получение| OP
+
+    style PG fill:#f9f,stroke:#333,stroke-width:2px
+    style AF fill:#bbf,stroke:#333,stroke-width:2px
+    style MINIO fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+### Расширенная версия
+```mermaid
+graph TD
+    subgraph PostgreSQL
+        PG[Сервер PostgreSQL]
+    end
+
+    subgraph Оркестратор
+        ORCH[TeamCity/Airflow]
+        PAR[Параллельная обработка]
+        VAL[Валидация]
+    end
+
+    subgraph Хранилище
+        MINIO[MinIO S3]
+        ENC[Слой шифрования]
+    end
+
+    PG -->|параллельный бэкап| PAR
+    PAR -->|планирование| ORCH
+    PAR -->|шифрование| ENC
+    ENC -->|хранение| MINIO
+    MINIO -->|получение| VAL
+    VAL -->|проверка| ORCH
+
+    style PG fill:#f9f,stroke:#333,stroke-width:2px
+    style ORCH fill:#bbf,stroke:#333,stroke-width:2px
+    style MINIO fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+### Процесс бэкапа
+```mermaid
+sequenceDiagram
+    participant O as Оркестратор
+    participant P as PostgreSQL
+    participant E as Шифрование
+    participant S as Хранилище
+
+    O->>P: Запрос на бэкап
+    P->>O: Создание бэкапа
+    O->>E: Шифрование
+    E->>S: Сохранение
+    S->>O: Подтверждение
+    O->>O: Валидация
+    O->>S: Ротация старых бэкапов
 ```
 
 ## Вклад в проект
