@@ -2,6 +2,117 @@
 
 Это решение для автоматического бэкапа и восстановления баз данных PostgreSQL с использованием TeamCity и Apache Airflow.
 
+## Архитектура решений
+
+### TeamCity Solution
+```mermaid
+graph TD
+    subgraph PostgreSQL
+        PG[PostgreSQL Server]
+    end
+
+    subgraph TeamCity
+        TC[TeamCity Server]
+        BA[Build Agent]
+        BS[Backup Script]
+    end
+
+    subgraph Storage
+        MINIO[MinIO S3]
+        AWS[AWS CLI]
+    end
+
+    PG -->|pg_dump| BS
+    BS -->|execute| BA
+    BA -->|monitor| TC
+    BS -->|upload| AWS
+    AWS -->|store| MINIO
+    MINIO -->|retrieve| BS
+
+    style PG fill:#f9f,stroke:#333,stroke-width:2px
+    style TC fill:#bbf,stroke:#333,stroke-width:2px
+    style MINIO fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+### Airflow Solution
+```mermaid
+graph TD
+    subgraph PostgreSQL
+        PG[PostgreSQL Server]
+    end
+
+    subgraph Airflow
+        AF[Airflow Server]
+        SCH[Scheduler]
+        DAG[DAG]
+        OP[Python Operator]
+    end
+
+    subgraph Storage
+        MINIO[MinIO S3]
+        BOTO[Boto3 Client]
+    end
+
+    PG -->|psycopg2| OP
+    OP -->|execute| DAG
+    DAG -->|schedule| SCH
+    SCH -->|monitor| AF
+    OP -->|upload| BOTO
+    BOTO -->|store| MINIO
+    MINIO -->|retrieve| OP
+
+    style PG fill:#f9f,stroke:#333,stroke-width:2px
+    style AF fill:#bbf,stroke:#333,stroke-width:2px
+    style MINIO fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+### Расширенная версия
+```mermaid
+graph TD
+    subgraph PostgreSQL
+        PG[PostgreSQL Server]
+    end
+
+    subgraph Orchestrator
+        ORCH[TeamCity/Airflow]
+        PAR[Parallel Processing]
+        VAL[Validation]
+    end
+
+    subgraph Storage
+        MINIO[MinIO S3]
+        ENC[Encryption Layer]
+    end
+
+    PG -->|parallel backup| PAR
+    PAR -->|schedule| ORCH
+    PAR -->|encrypt| ENC
+    ENC -->|store| MINIO
+    MINIO -->|retrieve| VAL
+    VAL -->|verify| ORCH
+
+    style PG fill:#f9f,stroke:#333,stroke-width:2px
+    style ORCH fill:#bbf,stroke:#333,stroke-width:2px
+    style MINIO fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+### Процесс бэкапа
+```mermaid
+sequenceDiagram
+    participant O as Orchestrator
+    participant P as PostgreSQL
+    participant E as Encryption
+    participant S as Storage
+
+    O->>P: Запрос на бэкап
+    P->>O: Создание бэкапа
+    O->>E: Шифрование
+    E->>S: Сохранение
+    S->>O: Подтверждение
+    O->>O: Валидация
+    O->>S: Ротация старых бэкапов
+```
+
 ## Структура проекта
 
 ```
