@@ -3,6 +3,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
+from airflow.hooks.base import BaseHook
 from datetime import datetime, timedelta
 import os
 import subprocess
@@ -24,20 +25,26 @@ default_args = {
 
 # Функция для получения параметров подключения
 def get_connection_params():
-    """Получение параметров подключения из переменных Airflow"""
+    """Получение параметров подключения из Airflow Connections"""
+    # Получаем PostgreSQL connection
+    pg_conn = BaseHook.get_connection('postgres_default')
+    
+    # Получаем MinIO connection
+    minio_conn = BaseHook.get_connection('minio_default')
+    
     return {
-        'host': Variable.get('PG_HOST', 'localhost'),
-        'port': Variable.get('PG_PORT', '5432'),
-        'database': Variable.get('PG_DB', 'postgres'),
-        'user': Variable.get('PG_USER', 'postgres'),
-        'jdbc_url': Variable.get('PG_JDBC_URL', None),
-        'minio_endpoint': Variable.get('MINIO_ENDPOINT', 'https://minio.vanek-test.com'),
-        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),
-        'minio_access_key': Variable.get('MINIO_ACCESS_KEY', 'minioadmin'),
-        'minio_secret_key': Variable.get('MINIO_SECRET_KEY', 'minioadmin'),
-        'backup_retention_days': int(Variable.get('BACKUP_RETENTION_DAYS', '30')),
-        'parallel_jobs': int(Variable.get('PARALLEL_JOBS', '4')),
-        'incremental_backup': Variable.get('INCREMENTAL_BACKUP', 'false').lower() == 'true',
+        'host': pg_conn.host,
+        'port': pg_conn.port,
+        'database': pg_conn.schema,
+        'user': pg_conn.login,
+        'password': pg_conn.password,
+        'jdbc_url': pg_conn.get_uri(),  # Полный JDBC URL
+        'minio_endpoint': minio_conn.host,
+        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),  # Бакет можно оставить в переменных
+        'minio_access_key': minio_conn.login,
+        'minio_secret_key': minio_conn.password,
+        'parallel_jobs': Variable.get('PARALLEL_JOBS', '4'),
+        'incremental_backup': Variable.get('INCREMENTAL_BACKUP', 'false'),
         'last_full_backup': Variable.get('LAST_FULL_BACKUP', ''),
     }
 

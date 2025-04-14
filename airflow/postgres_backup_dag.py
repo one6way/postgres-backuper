@@ -3,6 +3,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
+from airflow.hooks.base import BaseHook
 from datetime import datetime, timedelta
 import os
 import subprocess
@@ -21,17 +22,24 @@ default_args = {
 
 # Функция для получения параметров подключения
 def get_connection_params():
-    """Получение параметров подключения из переменных Airflow"""
+    """Получение параметров подключения из Airflow Connections"""
+    # Получаем PostgreSQL connection
+    pg_conn = BaseHook.get_connection('postgres_default')
+    
+    # Получаем MinIO connection
+    minio_conn = BaseHook.get_connection('minio_default')
+    
     return {
-        'host': Variable.get('PG_HOST', 'localhost'),
-        'port': Variable.get('PG_PORT', '5432'),
-        'database': Variable.get('PG_DB', 'postgres'),
-        'user': Variable.get('PG_USER', 'postgres'),
-        'jdbc_url': Variable.get('PG_JDBC_URL', None),  # Опциональный JDBC URL
-        'minio_endpoint': Variable.get('MINIO_ENDPOINT', 'https://minio.vanek-test.com'),
-        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),
-        'minio_access_key': Variable.get('MINIO_ACCESS_KEY', 'minioadmin'),
-        'minio_secret_key': Variable.get('MINIO_SECRET_KEY', 'minioadmin'),
+        'host': pg_conn.host,
+        'port': pg_conn.port,
+        'database': pg_conn.schema,
+        'user': pg_conn.login,
+        'password': pg_conn.password,
+        'jdbc_url': pg_conn.get_uri(),  # Полный JDBC URL
+        'minio_endpoint': minio_conn.host,
+        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),  # Бакет можно оставить в переменных
+        'minio_access_key': minio_conn.login,
+        'minio_secret_key': minio_conn.password,
     }
 
 def run_command(cmd):
@@ -44,11 +52,12 @@ def run_command(cmd):
         raise Exception(error_msg)
     return stdout.decode('utf-8')
 
-def check_postgres():
+def check_postgres(**context):
     """Проверка подключения к PostgreSQL"""
     print("Проверка подключения к PostgreSQL...")
+    params = get_connection_params()
     try:
-        cmd = f"pg_isready -h {PG_HOST} -p {PG_PORT} -d {PG_DB} -U {PG_USER}"
+        cmd = f"pg_isready -h {params['host']} -p {params['port']} -d {params['database']} -U {params['user']}"
         run_command(cmd)
         print("Соединение с PostgreSQL успешно установлено.")
     except Exception as e:
@@ -81,12 +90,7 @@ def create_backup(**context):
     
     try:
         # Формируем команду для бэкапа
-        if params['jdbc_url']:
-            # Используем JDBC URL если он предоставлен
-            backup_cmd = f"pg_dump '{params['jdbc_url']}'"
-        else:
-            # Используем отдельные параметры подключения
-            backup_cmd = f"pg_dump -h {params['host']} -p {params['port']} -U {params['user']} -d {params['database']}"
+        backup_cmd = f"pg_dump '{params['jdbc_url']}'"
         
         # Добавляем сжатие и сохранение
         backup_file = f"{backup_dir}/backup_{date}.sql.gz"
@@ -134,14 +138,8 @@ def restore_backup(**context):
         s3_cp_cmd = f"aws s3 cp s3://{params['minio_bucket']}/backups/{backup_file} {local_file} --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
         run_command(s3_cp_cmd)
         
-        # Формируем команду для восстановления
-        if params['jdbc_url']:
-            restore_cmd = f"psql '{params['jdbc_url']}'"
-        else:
-            restore_cmd = f"psql -h {params['host']} -p {params['port']} -U {params['user']} -d {params['database']}"
-        
         # Выполняем восстановление
-        restore_cmd = f"gunzip -c {local_file} | {restore_cmd}"
+        restore_cmd = f"gunzip -c {local_file} | psql '{params['jdbc_url']}'"
         run_command(restore_cmd)
         
         # Очищаем временные файлы

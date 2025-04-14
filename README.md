@@ -282,4 +282,39 @@ sequenceDiagram
 ```
 
 ## Вклад в проект
-Приветствуются предложения по улучшению и сообщения об ошибках! 
+Приветствуются предложения по улучшению и сообщения об ошибках!
+
+## Последние изменения
+
+### Улучшения в Airflow DAG
+- Переход на использование Airflow Connections вместо Variables для хранения конфиденциальных данных
+- Улучшенная обработка ошибок с использованием AirflowException
+- Более безопасное выполнение команд через subprocess.run
+- Улучшенный мониторинг свободного места на диске
+- Расширенная документация функций
+
+### Настройка Airflow Connections
+Для работы с новыми DAG необходимо настроить следующие Connections в Airflow:
+
+1. PostgreSQL Connection:
+   - Connection ID: `postgres_default`
+   - Connection Type: `Postgres`
+   - Host: ваш хост PostgreSQL
+   - Schema: ваша база данных
+   - Login: ваш пользователь PostgreSQL
+   - Password: ваш пароль PostgreSQL
+   - Port: порт PostgreSQL (по умолчанию 5432)
+
+2. MinIO Connection (для облачного решения):
+   - Connection ID: `minio_default`
+   - Connection Type: `S3`
+   - Host: ваш эндпоинт MinIO
+   - Login: ваш ключ доступа MinIO
+   - Password: ваш секретный ключ MinIO
+
+### Переменные Airflow
+Для дополнительной конфигурации используются следующие переменные:
+- `MINIO_BUCKET`: имя бакета для хранения бэкапов
+- `PARALLEL_JOBS`: количество параллельных задач (по умолчанию 4)
+- `INCREMENTAL_BACKUP`: включение инкрементальных бэкапов (true/false)
+- `LAST_FULL_BACKUP`: дата последнего полного бэкапа 
