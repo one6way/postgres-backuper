@@ -15,7 +15,6 @@ postgres-backup/
 │   ├── postgres_backup_dag.py  # Базовый DAG для Airflow
 │   └── advanced/
 │       └── postgres_backup_dag_advanced.py  # Расширенный DAG с дополнительными возможностями
-├── install.sh              # Скрипт установки зависимостей
 └── requirements.txt        # Зависимости Python
 ```
 
@@ -25,15 +24,15 @@ postgres-backup/
 - AWS CLI (для работы с MinIO S3)
 - TeamCity или Apache Airflow (в зависимости от выбранного решения)
 - MinIO сервер
+- Python 3.8+
 
 ## Быстрый старт
 
 1. Скачайте и распакуйте проект
-2. Запустите скрипт установки:
+2. Установите зависимости:
 ```bash
 cd postgres-backup
-chmod +x install.sh
-./install.sh
+pip install -r requirements.txt
 ```
 
 ## Настройка переменных окружения
