@@ -1,7 +1,14 @@
-# Зависимости для PostgreSQL backup/restore
-psycopg2-binary>=2.9.5
-boto3>=1.28.0
-awscli>=1.29.0
+# Базовые зависимости
+psycopg2-binary>=2.9.5  # PostgreSQL клиент для Python
+boto3>=1.28.0          # AWS SDK для работы с MinIO S3
+
+# Опциональные зависимости
+# Для Airflow DAG'ов
 apache-airflow>=2.6.0
-cryptography>=41.0.0  # Для шифрования бэкапов
-python-gnupg>=0.5.1   # Для PGP/GPG шифрования 
+
+# Для шифрования бэкапов
+cryptography>=41.0.0    # Для AES шифрования
+python-gnupg>=0.5.1     # Для PGP/GPG шифрования
+
+# Для CLI инструментов
+awscli>=1.29.0         # Только если нужен AWS CLI 

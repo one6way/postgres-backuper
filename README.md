@@ -20,19 +20,55 @@ postgres-backup/
 
 ## Требования
 
-- PostgreSQL клиент
-- AWS CLI (для работы с MinIO S3)
-- TeamCity или Apache Airflow (в зависимости от выбранного решения)
-- MinIO сервер
+### Базовые требования
+- PostgreSQL клиент (pg_dump, pg_restore)
 - Python 3.8+
+- MinIO сервер или совместимое S3 хранилище
 
-## Быстрый старт
+### Дополнительные требования
+- TeamCity (для TeamCity версии)
+- Apache Airflow (для Airflow версии)
+- AWS CLI (опционально, для ручной работы с MinIO)
 
-1. Скачайте и распакуйте проект
-2. Установите зависимости:
+## Установка
+
+### 1. Установка базовых зависимостей
 ```bash
-cd postgres-backup
+# Установка PostgreSQL клиента
+# Для Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y postgresql-client
+
+# Для CentOS/RHEL
+sudo yum install -y postgresql
+
+# Установка Python зависимостей
 pip install -r requirements.txt
+```
+
+### 2. Установка дополнительных зависимостей
+
+#### Для TeamCity
+```bash
+# Установка AWS CLI (опционально)
+pip install awscli
+```
+
+#### Для Airflow
+```bash
+# Установка Airflow и зависимостей
+pip install apache-airflow>=2.6.0
+```
+
+### 3. Настройка MinIO
+```bash
+# Настройка AWS CLI для работы с MinIO
+aws configure --profile minio
+# Введите:
+# - Access Key ID: ваш MinIO access key
+# - Secret Access Key: ваш MinIO secret key
+# - Default region: minio
+# - Default output format: json
 ```
 
 ## Настройка переменных окружения
