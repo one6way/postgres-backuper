@@ -1,6 +1,6 @@
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
-from airflow.operators.bash_operator import BashOperator
+from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
 from airflow.exceptions import AirflowException
 from airflow.models import Variable
 from airflow.hooks.base import BaseHook
@@ -23,40 +23,50 @@ default_args = {
 # Функция для получения параметров подключения
 def get_connection_params():
     """Получение параметров подключения из Airflow Connections"""
-    # Получаем PostgreSQL connection
-    pg_conn = BaseHook.get_connection('postgres_default')
-    
-    # Получаем MinIO connection
-    minio_conn = BaseHook.get_connection('minio_default')
-    
-    return {
-        'host': pg_conn.host,
-        'port': pg_conn.port,
-        'database': pg_conn.schema,
-        'user': pg_conn.login,
-        'password': pg_conn.password,
-        'jdbc_url': pg_conn.get_uri(),  # Полный JDBC URL
-        'minio_endpoint': minio_conn.host,
-        'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),  # Бакет можно оставить в переменных
-        'minio_access_key': minio_conn.login,
-        'minio_secret_key': minio_conn.password,
-    }
+    try:
+        # Получаем PostgreSQL connection
+        pg_conn = BaseHook.get_connection('postgres_default')
+        if not all([pg_conn.host, pg_conn.port, pg_conn.schema, pg_conn.login, pg_conn.password]):
+            raise AirflowException("Не все параметры подключения к PostgreSQL указаны в Connection")
+        
+        # Получаем MinIO connection
+        minio_conn = BaseHook.get_connection('minio_default')
+        if not all([minio_conn.host, minio_conn.login, minio_conn.password]):
+            raise AirflowException("Не все параметры подключения к MinIO указаны в Connection")
+        
+        return {
+            'host': pg_conn.host,
+            'port': pg_conn.port,
+            'database': pg_conn.schema,
+            'user': pg_conn.login,
+            'password': pg_conn.password,
+            'jdbc_url': pg_conn.get_uri(),  # Полный JDBC URL
+            'minio_endpoint': minio_conn.host,
+            'minio_bucket': Variable.get('MINIO_BUCKET', 'postgres-backup'),  # Бакет можно оставить в переменных
+            'minio_access_key': minio_conn.login,
+            'minio_secret_key': minio_conn.password,
+        }
+    except Exception as e:
+        raise AirflowException(f"Ошибка при получении параметров подключения: {str(e)}")
 
 def run_command(cmd):
     """Запуск команды с проверкой результата"""
-    process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    if process.returncode != 0:
-        error_msg = f"Ошибка выполнения команды: {cmd}\n{stderr.decode('utf-8')}"
-        print(error_msg)
-        raise Exception(error_msg)
-    return stdout.decode('utf-8')
+    try:
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        if process.returncode != 0:
+            error_msg = f"Ошибка выполнения команды: {cmd}\n{stderr.decode('utf-8')}"
+            print(error_msg)
+            raise Exception(error_msg)
+        return stdout.decode('utf-8')
+    except Exception as e:
+        raise AirflowException(f"Ошибка при выполнении команды: {str(e)}")
 
 def check_postgres(**context):
     """Проверка подключения к PostgreSQL"""
     print("Проверка подключения к PostgreSQL...")
-    params = get_connection_params()
     try:
+        params = get_connection_params()
         cmd = f"pg_isready -h {params['host']} -p {params['port']} -d {params['database']} -U {params['user']}"
         run_command(cmd)
         print("Соединение с PostgreSQL успешно установлено.")
@@ -65,30 +75,41 @@ def check_postgres(**context):
 
 def setup_minio_config(**context):
     """Настройка конфигурации AWS CLI для MinIO"""
-    params = get_connection_params()
-    
-    os.makedirs(os.path.expanduser('~/.aws'), exist_ok=True)
-    
-    with open(os.path.expanduser('~/.aws/credentials'), 'w') as f:
-        f.write(f"""[minio]
+    try:
+        params = get_connection_params()
+        
+        aws_dir = os.path.expanduser('~/.aws')
+        os.makedirs(aws_dir, exist_ok=True)
+        
+        # Создаем credentials файл
+        credentials_path = os.path.join(aws_dir, 'credentials')
+        with open(credentials_path, 'w') as f:
+            f.write(f"""[minio]
 aws_access_key_id = {params['minio_access_key']}
 aws_secret_access_key = {params['minio_secret_key']}
 """)
-    
-    with open(os.path.expanduser('~/.aws/config'), 'w') as f:
-        f.write("""[profile minio]
+        os.chmod(credentials_path, 0o600)  # Только владелец имеет доступ
+        
+        # Создаем config файл
+        config_path = os.path.join(aws_dir, 'config')
+        with open(config_path, 'w') as f:
+            f.write("""[profile minio]
 s3 =
     path_style_access = true
 """)
+        os.chmod(config_path, 0o600)  # Только владелец имеет доступ
+        
+    except Exception as e:
+        raise AirflowException(f"Ошибка при настройке конфигурации MinIO: {str(e)}")
 
 def create_backup(**context):
     """Создание бэкапа с поддержкой кастомных параметров"""
-    params = get_connection_params()
-    date = context['ds_nodash']
-    backup_dir = '/tmp/postgres_backup'
-    os.makedirs(backup_dir, exist_ok=True)
-    
     try:
+        params = get_connection_params()
+        date = context['ds_nodash']
+        backup_dir = '/tmp/postgres_backup'
+        os.makedirs(backup_dir, exist_ok=True)
+        
         # Формируем команду для бэкапа
         backup_cmd = f"pg_dump '{params['jdbc_url']}'"
         
@@ -107,20 +128,23 @@ def create_backup(**context):
         os.remove(backup_file)
         
     except Exception as e:
-        if os.path.exists(backup_file):
+        if 'backup_file' in locals() and os.path.exists(backup_file):
             os.remove(backup_file)
-        raise e
+        raise AirflowException(f"Ошибка при создании бэкапа: {str(e)}")
 
 def restore_backup(**context):
     """Восстановление из бэкапа с поддержкой кастомных параметров"""
-    params = get_connection_params()
-    backup_dir = '/tmp/postgres_backup'
-    os.makedirs(backup_dir, exist_ok=True)
-    
     try:
+        params = get_connection_params()
+        backup_dir = '/tmp/postgres_backup'
+        os.makedirs(backup_dir, exist_ok=True)
+        
         # Получаем список бэкапов
         s3_ls_cmd = f"aws s3 ls s3://{params['minio_bucket']}/backups/ --endpoint-url {params['minio_endpoint']} --profile minio --no-verify-ssl"
         backups = run_command(s3_ls_cmd).strip().split('\n')
+        
+        if not backups or not any(backups):
+            raise AirflowException("Нет доступных бэкапов для восстановления")
         
         # Находим нужный бэкап
         backup_date = context.get('params', {}).get('backup_date', None)
@@ -128,7 +152,7 @@ def restore_backup(**context):
             # Ищем конкретный бэкап по дате
             backup_file = f"backup_{backup_date}.sql.gz"
             if not any(backup_file in b for b in backups):
-                raise Exception(f"Бэкап за дату {backup_date} не найден")
+                raise AirflowException(f"Бэкап за дату {backup_date} не найден")
         else:
             # Берем последний бэкап
             backup_file = backups[-1].split()[-1]
@@ -148,7 +172,7 @@ def restore_backup(**context):
     except Exception as e:
         if 'local_file' in locals() and os.path.exists(local_file):
             os.remove(local_file)
-        raise e
+        raise AirflowException(f"Ошибка при восстановлении из бэкапа: {str(e)}")
 
 # Создаем DAG
 dag = DAG(
@@ -186,7 +210,8 @@ restore_task = PythonOperator(
     task_id='restore_postgres',
     python_callable=restore_backup,
     dag=dag,
-    trigger_rule='manual',  # Только ручной запуск
+    trigger_rule='all_success',
+    depends_on_past=False,
 )
 
 # Определяем зависимости
