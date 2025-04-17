@@ -318,4 +318,88 @@ sequenceDiagram
 - `MINIO_BACKUP_PATH`: путь в бакете для хранения бэкапов (по умолчанию 'backups/postgres')
 - `PARALLEL_JOBS`: количество параллельных задач (по умолчанию 4)
 - `INCREMENTAL_BACKUP`: включение инкрементальных бэкапов (true/false)
-- `LAST_FULL_BACKUP`: дата последнего полного бэкапа 
+- `LAST_FULL_BACKUP`: дата последнего полного бэкапа
+
+# Postgres Backup Tools
+
+This repository contains tools for managing PostgreSQL backups and MinIO storage cleanup.
+
+## Components
+
+### 1. PostgreSQL Backup DAG
+Airflow DAG for automated PostgreSQL database backups.
+
+### 2. MinIO Cleanup Tools
+Two tools for cleaning old files in MinIO buckets:
+
+#### 2.1. Airflow DAG (`minio_cleanup_dag.py`)
+- Cleans old files from specified MinIO buckets and folders
+- Features:
+  - Multi-folder support with different retention periods
+  - Detailed statistics for each folder and overall cleanup
+  - Tracks largest deleted files
+  - Configurable through Airflow connections and parameters
+
+Example configuration:
+```python
+params={
+    'bucket_name': 'your-bucket',
+    'folders': [
+        {
+            'prefix': 'logs/',    # Folder path
+            'days_old': 7,        # Keep files for 7 days
+        },
+        {
+            'prefix': 'temp/',    # Another folder
+            'days_old': 2,        # Keep files for 2 days
+        }
+    ]
+}
+```
+
+#### 2.2. Bash Script (`s3_cleaner.sh`)
+Simple bash script for manual MinIO cleanup:
+```bash
+./s3_cleaner.sh <endpoint_url> <access_key> <secret_key> <bucket_name> [prefix]
+```
+
+Requirements:
+- AWS CLI installed
+- MinIO credentials
+- Proper permissions on target bucket
+
+## Setup
+
+### MinIO Connection in Airflow
+1. Go to Airflow UI -> Admin -> Connections
+2. Add new connection:
+   - Connection Id: `minio_conn`
+   - Connection Type: `HTTP`
+   - Host: Your MinIO server URL (e.g., `http://minio.example.com:9000`)
+   - Login: Your MinIO access key
+   - Password: Your MinIO secret key
+
+### Dependencies
+```bash
+pip install apache-airflow-providers-amazon boto3
+```
+
+## Usage
+
+### Running MinIO Cleanup DAG
+The DAG runs daily at midnight and cleans files according to the configured retention periods.
+
+### Manual Cleanup
+Use the bash script for one-time cleanup:
+```bash
+chmod +x s3_cleaner.sh
+./s3_cleaner.sh http://minio:9000 access_key secret_key my-bucket logs/
+```
+
+## Monitoring
+The cleanup process provides detailed statistics:
+- Total files processed and deleted
+- Total size processed and deleted
+- Largest deleted file information
+- Execution time
+- Per-folder statistics 
